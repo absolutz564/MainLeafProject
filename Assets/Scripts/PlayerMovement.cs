@@ -1,0 +1,69 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PlayerMovement : MonoBehaviour
+{
+
+    public CharacterController controller;
+
+    public float speed = 12f;
+    public float gravity = -9.81f;
+    public float jumpHeight = 3f;
+
+    public Transform GroundCheck;
+    public float groundDistance = 0.4f;
+    public LayerMask groundMask;
+
+    public Vector3 velocity;
+    public bool isGrounded;
+    public AudioSource MyAudioSource;
+
+    private float lastPosition;
+
+    // Update is called once per frame
+    void Update()
+    {
+        isGrounded = Physics.CheckSphere(GroundCheck.position, groundDistance, groundMask);
+
+        if (isGrounded && velocity.y < 0)
+        {
+            velocity.y = -2f;
+        }
+
+
+        if (lastPosition != transform.position.x)
+        {
+            //-- Do whatever it is you need to do when the object is moving.
+            if (!MyAudioSource.isPlaying)
+            {
+                MyAudioSource.Play();
+            }
+
+        }
+        else
+        {
+            MyAudioSource.Stop();
+        }
+        lastPosition = transform.position.x;
+
+
+        float x = Input.GetAxis("Horizontal");
+        float z = Input.GetAxis("Vertical");
+
+        Vector3 move = transform.right * x + transform.forward * z;
+
+        controller.Move(move * speed * Time.deltaTime);
+
+        if (Input.GetButtonDown("Jump") && isGrounded)
+        {
+            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+
+        }
+
+        velocity.y += gravity * Time.deltaTime;
+
+        controller.Move(velocity * Time.deltaTime);
+
+    }
+}
