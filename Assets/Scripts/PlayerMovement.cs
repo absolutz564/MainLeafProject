@@ -35,9 +35,15 @@ public class PlayerMovement : MonoBehaviour
         if (lastPosition != transform.position.x)
         {
             //-- Do whatever it is you need to do when the object is moving.
-            if (!MyAudioSource.isPlaying)
+            if (!MyAudioSource.isPlaying && isGrounded)
             {
                 MyAudioSource.Play();
+            }
+
+            //stop steps sound if jumping
+            if (!isGrounded && MyAudioSource.isPlaying)
+            {
+                MyAudioSource.Stop();
             }
 
         }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.UI;
 
 public class EnemyAI : MonoBehaviour
 {
@@ -30,31 +31,101 @@ public class EnemyAI : MonoBehaviour
     public Transform BaseArrow;
     public Animator EnemyAnim;
 
-    public bool IsStaticEnemy;
-    
+    public Enemies EnemyType;
+
+    public Slider HealthBar;
+    bool IsDead = false;
+
+    public List<GameObject> ArrowsList;
+
+    [System.Serializable]
+    public enum Enemies
+    {
+        Archer,
+        Warrior
+    }
+
+    public void Damage()
+    {
+        health -= 25;
+        HealthBar.value = health;
+        if (health<= 0)
+        {
+            Dead();
+        }
+    }
+
+    void Dead()
+    {
+        GameController.Instance.EnemiesDied++;
+        IsDead = true;
+        EnemyAnim.SetBool("attacking", false);
+        EnemyAnim.SetBool("following", false);
+        EnemyAnim.SetBool("walking", false);
+        EnemyAnim.SetBool("dead", true);
+        agent.Stop();
+        Destroy(this.gameObject, 4);
+        IncreasePlayerPoints();
+
+        RemoveEnemyColisor();
+
+        //Chance to spawn items
+        GameController.Instance.SpawnItems(this.transform);
+    }
+
+    void RemoveEnemyColisor()
+    {
+        Collider coll = this.GetComponent<Collider>();
+        coll.isTrigger = true;
+    }
+
+    void IncreasePlayerPoints()
+    {
+        GameController.Instance.IncreasePlayerPoints();
+    }
+
     private void Awake()
     {
+        ConfigPool();
         EnemyAnim = GetComponent<Animator>();
         player = GameObject.Find("PlayerObj").transform;
         agent = GetComponent<NavMeshAgent>();
     }
 
+    void OnTriggerEnter(Collider coll)
+    {
+        if (coll.CompareTag("PlayerArrow"))
+        {
+            Debug.Log("Flexa do player acertou inimigo");
+            coll.gameObject.SetActive(false);
+            Damage();
+        }
+    }
+
     private void Update()
     {
         //Check for sight and attack range
-        playerInSightRange = Physics.CheckSphere(transform.position, sightRange, whatIsPlayer);
-        playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
+        if (IsDead == false)
+        {
+            playerInSightRange = Physics.CheckSphere(transform.position, sightRange, whatIsPlayer);
+            playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
 
-        if (!playerInSightRange && !playerInAttackRange) Patroling();
-        if (playerInSightRange && !playerInAttackRange) ChasePlayer();
-        if (playerInAttackRange && playerInSightRange) AttackPlayer();
+            if (!playerInSightRange && !playerInAttackRange) Patroling();
+            if (playerInSightRange && !playerInAttackRange) ChasePlayer();
+            if (playerInAttackRange && playerInSightRange) AttackPlayer();
+        }
+    }
+
+    public void Hit()
+    {
+        GameController.Instance.HitPlayer();
     }
 
     private void Patroling()
     {
         if (!walkPointSet) SearchWalkPoint();
 
-        if (walkPointSet && !IsStaticEnemy)
+        if (walkPointSet && EnemyType != Enemies.Archer)
             agent.SetDestination(walkPoint);
 
         Vector3 distanceToWalkPoint = transform.position - walkPoint;
@@ -66,7 +137,7 @@ public class EnemyAI : MonoBehaviour
         EnemyAnim.SetBool("attacking", false);
         EnemyAnim.SetBool("following", false);
 
-        if (!IsStaticEnemy)
+        if (EnemyType != Enemies.Archer)
         {
             //Anim Walking
             EnemyAnim.SetBool("walking", true);
@@ -99,36 +170,63 @@ public class EnemyAI : MonoBehaviour
     public void InstantiateArrow()
     {
         ///Attack code here
-        Rigidbody rb = Instantiate(projectile, BaseArrow.position, BaseArrow.rotation).GetComponent<Rigidbody>();
-        rb.AddForce(transform.forward * 15f, ForceMode.Impulse);
-        rb.AddForce(transform.up * 4f, ForceMode.Impulse);
-        Destroy(rb.gameObject, 4f);
+        PoolArrow();
+    }
+
+    void ConfigPool()
+    {
+        Debug.Log("Criou Pool de flecha inimiga");
+        ArrowsList = new List<GameObject>();
+        for (int i = 0; i < 10; i++)
+        {
+            GameObject objBullet = (GameObject)Instantiate(projectile);
+            objBullet.SetActive(false);
+            ArrowsList.Add(objBullet);
+        }
+    }
+    void PoolArrow()
+    {
+        for (int i = 0; i < ArrowsList.Count; i++)
+        {
+            if (!ArrowsList[i].activeInHierarchy)
+            {
+                ArrowsList[i].transform.position = BaseArrow.position;
+                ArrowsList[i].transform.rotation = BaseArrow.rotation;
+                ArrowsList[i].SetActive(true);
+
+                Rigidbody rb = ArrowsList[i].GetComponent<Rigidbody>();
+                rb.transform.tag = "EnemyArrow";
+                rb.AddForce(transform.forward * 15f, ForceMode.Impulse);
+                rb.AddForce(transform.up * Random.Range(3f, 6f), ForceMode.Impulse);
+                break;
+            }
+        }
+
     }
 
     private void AttackPlayer()
     {
 
+            //Make sure enemy doesn't move
+            agent.SetDestination(transform.position);
 
-        //Make sure enemy doesn't move
-        agent.SetDestination(transform.position);
+            transform.LookAt(player);
 
-        transform.LookAt(player);
+            if (!alreadyAttacked)
+            {
+                Quaternion EnemyRot = this.GetComponent<Transform>().rotation;
 
-        if (!alreadyAttacked)
-        {
-            Quaternion EnemyRot = this.GetComponent<Transform>().rotation;
-
-            //Anim Attack
-            EnemyAnim.SetBool("attacking", true);
-            EnemyAnim.SetBool("following", false);
-            EnemyAnim.SetBool("walking", false);
+                //Anim Attack
+                EnemyAnim.SetBool("attacking", true);
+                EnemyAnim.SetBool("following", false);
+                EnemyAnim.SetBool("walking", false);
 
 
-            ///End of attack code
+                ///End of attack code
 
-            alreadyAttacked = true;
-            Invoke(nameof(ResetAttack), timeBetweenAttacks);
-        }
+                alreadyAttacked = true;
+                Invoke(nameof(ResetAttack), timeBetweenAttacks);
+            }
     }
     private void ResetAttack()
     {
